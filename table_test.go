@@ -1,6 +1,7 @@
 package table_test
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// CustomType implements TableMarshaller and TableUnmarshaller
+// CustomType implements TableMarshaller and TableUnmarshaler
 type CustomType struct {
 	value string
 }
@@ -368,6 +369,298 @@ func TestUnmarshalWithOptions_nilValue(t *testing.T) {
 				}
 				assert.Equal(t, tt.expected[i].Normal, result[i].Normal)
 			}
+		})
+	}
+}
+
+type EmbeddedAddress struct {
+	Street string `table:"street"`
+	City   string `table:"city"`
+}
+
+type PersonWithAddress struct {
+	Name string `table:"name"`
+	Age  int    `table:"age"`
+	EmbeddedAddress
+}
+
+type ConflictAddress struct {
+	Street string `table:"addr"` // conflicting tag
+}
+
+type PersonWithConflict struct {
+	Name string `table:"name"`
+	ConflictAddress
+	Addr string `table:"addr"` // same tag as embedded field
+}
+
+func TestMarshal_embedded(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          interface{}
+		expectedHeader []string
+		expectedData   [][]string
+		wantErr        bool
+	}{
+		{
+			name: "basic embedding",
+			input: []PersonWithAddress{
+				{
+					Name: "John",
+					Age:  30,
+					EmbeddedAddress: EmbeddedAddress{
+						Street: "123 Main St",
+						City:   "Springfield",
+					},
+				},
+			},
+			expectedHeader: []string{"name", "age", "street", "city"},
+			expectedData: [][]string{
+				{"John", "30", "123 Main St", "Springfield"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "tag conflict resolution",
+			input: []PersonWithConflict{
+				{
+					Name: "John",
+					Addr: "Primary Address", // This should win
+					ConflictAddress: ConflictAddress{
+						Street: "Should not appear",
+					},
+				},
+			},
+			expectedHeader: []string{"name", "addr"},
+			expectedData: [][]string{
+				{"John", "Primary Address"},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header, data, err := table.Marshal(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Marshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				assert.Equal(t, tt.expectedHeader, header)
+				assert.Equal(t, tt.expectedData, data)
+			}
+		})
+	}
+}
+
+func TestUnmarshal_embedded(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  []string
+		data    [][]string
+		want    interface{}
+		wantErr bool
+	}{
+		{
+			name:   "basic embedding",
+			header: []string{"name", "age", "street", "city"},
+			data: [][]string{
+				{"John", "30", "123 Main St", "Springfield"},
+			},
+			want: []PersonWithAddress{
+				{
+					Name: "John",
+					Age:  30,
+					EmbeddedAddress: EmbeddedAddress{
+						Street: "123 Main St",
+						City:   "Springfield",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:   "tag conflict resolution",
+			header: []string{"name", "addr"},
+			data: [][]string{
+				{"John", "Primary Address"},
+			},
+			want: []PersonWithConflict{
+				{
+					Name: "John",
+					Addr: "Primary Address", // This should be set
+					ConflictAddress: ConflictAddress{
+						Street: "", // This should remain empty
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got interface{}
+			switch v := tt.want.(type) {
+			case []PersonWithAddress:
+				var result []PersonWithAddress
+				got = &result
+			case []PersonWithConflict:
+				var result []PersonWithConflict
+				got = &result
+			default:
+				t.Fatalf("Unexpected type: %T", v)
+			}
+
+			err := table.Unmarshal(tt.header, tt.data, got)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				assert.Equal(t, tt.want, reflect.ValueOf(got).Elem().Interface())
+			}
+		})
+	}
+}
+
+func TestMarshal_headerOrder(t *testing.T) {
+	type Inner struct {
+		B string `table:"b"`
+		C string `table:"c"`
+	}
+
+	type DeepInner struct {
+		X string `table:"x"`
+		Y string `table:"y"`
+	}
+
+	type DeepOuter struct {
+		DeepInner
+		Z string `table:"z"`
+	}
+
+	type Outer struct {
+		A string `table:"a"`
+		Inner
+		D string `table:"d"`
+		E string `table:"e"`
+	}
+
+	type Override struct {
+		Inner
+		B string `table:"b"` // Inner.B should be overridden
+		F string `table:"f"`
+	}
+
+	type MultipleEmbedded struct {
+		Inner
+		DeepOuter
+		M string `table:"m"`
+	}
+
+	type Duplicate struct {
+		A1 string `table:"same"`
+		A2 string `table:"same"` // Duplicate tag
+	}
+
+	tests := []struct {
+		name           string
+		input          interface{}
+		expectedHeader []string
+		expectedData   [][]string
+		wantErr        bool
+	}{
+		{
+			name: "maintain declaration order with embedded struct",
+			input: []Outer{
+				{
+					A: "a1",
+					Inner: Inner{
+						B: "b1",
+						C: "c1",
+					},
+					D: "d1",
+					E: "e1",
+				},
+			},
+			expectedHeader: []string{"a", "b", "c", "d", "e"},
+			expectedData: [][]string{
+				{"a1", "b1", "c1", "d1", "e1"},
+			},
+		},
+		{
+			name: "override embedded field",
+			input: []Override{
+				{
+					Inner: Inner{
+						B: "should not appear",
+						C: "c1",
+					},
+					B: "b1",
+					F: "f1",
+				},
+			},
+			expectedHeader: []string{"c", "b", "f"},
+			expectedData: [][]string{
+				{"c1", "b1", "f1"},
+			},
+		},
+		{
+			name:           "empty struct slice",
+			input:          []Outer{},
+			expectedHeader: nil,
+			expectedData:   nil,
+		},
+		{
+			name: "multiple level embedding",
+			input: []MultipleEmbedded{
+				{
+					Inner: Inner{
+						B: "b1",
+						C: "c1",
+					},
+					DeepOuter: DeepOuter{
+						DeepInner: DeepInner{
+							X: "x1",
+							Y: "y1",
+						},
+						Z: "z1",
+					},
+					M: "m1",
+				},
+			},
+			expectedHeader: []string{"b", "c", "x", "y", "z", "m"},
+			expectedData: [][]string{
+				{"b1", "c1", "x1", "y1", "z1", "m1"},
+			},
+		},
+		{
+			name: "duplicate tags",
+			input: []Duplicate{
+				{
+					A1: "first",
+					A2: "second", // The last one should win
+				},
+			},
+			expectedHeader: []string{"same"},
+			expectedData: [][]string{
+				{"second"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header, data, err := table.Marshal(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedHeader, header, "Headers should match expected order")
+			assert.Equal(t, tt.expectedData, data, "Data should match expected order")
 		})
 	}
 }

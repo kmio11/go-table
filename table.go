@@ -33,7 +33,10 @@ func DefaultOptions() *Options {
 	}
 }
 
-const tableTag = "table"
+const (
+	tagTable = "table"
+	ignore   = "-"
+)
 
 // Unmarshal converts table data into a slice of structs using default options.
 func Unmarshal(header []string, data [][]string, v any) error {
@@ -62,14 +65,8 @@ func UnmarshalWithOptions(header []string, data [][]string, v any, opts *Options
 		return fmt.Errorf("slice elements must be structs")
 	}
 
-	// Create a map of header to field index
-	fieldMap := make(map[string]int)
-	for i := 0; i < sliceElemType.NumField(); i++ {
-		field := sliceElemType.Field(i)
-		if tag := field.Tag.Get(tableTag); tag != "" {
-			fieldMap[tag] = i
-		}
-	}
+	// Get field mapping including embedded fields
+	fields := getFieldMap(sliceElemType).fields
 
 	// Process each row
 	for _, row := range data {
@@ -82,8 +79,12 @@ func UnmarshalWithOptions(header []string, data [][]string, v any, opts *Options
 
 		// Fill the struct fields
 		for i, col := range row {
-			if fieldIdx, ok := fieldMap[header[i]]; ok {
-				field := newStruct.Field(fieldIdx)
+			if info, ok := fields[header[i]]; ok {
+				// Navigate to the field through the embedded structs
+				field := newStruct
+				for _, idx := range info.index {
+					field = field.Field(idx)
+				}
 				if err := setField(field, col, opts); err != nil {
 					return fmt.Errorf("setting field %s: %v", header[i], err)
 				}
@@ -122,33 +123,116 @@ func MarshalWithOptions(v any, opts *Options) ([]string, [][]string, error) {
 		return nil, nil, fmt.Errorf("slice elements must be structs")
 	}
 
-	// Create header and prepare field mapping
-	var header []string
-	fieldIndices := make([]int, 0)
-
-	for i := 0; i < elemType.NumField(); i++ {
-		field := elemType.Field(i)
-		if tag := field.Tag.Get(tableTag); tag != "" {
-			header = append(header, tag)
-			fieldIndices = append(fieldIndices, i)
-		}
-	}
+	// Get field mapping including embedded fields and ordered tags
+	fm := getFieldMap(elemType)
+	fields, orderedTags := fm.fields, fm.orderedTags
 
 	// Create data rows
 	data := make([][]string, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
-		row := make([]string, len(header))
+		row := make([]string, len(orderedTags))
 		item := rv.Index(i)
 
-		for j, fieldIdx := range fieldIndices {
-			field := item.Field(fieldIdx)
+		for j, tag := range orderedTags {
+			info := fields[tag]
+			// Navigate to the field through the embedded structs
+			field := item
+			for _, idx := range info.index {
+				field = field.Field(idx)
+			}
 			row[j] = formatField(field, opts)
 		}
 
 		data[i] = row
 	}
 
-	return header, data, nil
+	return orderedTags, data, nil
+}
+
+// fieldInfo stores information about a struct field including its path through embedded structs
+type fieldInfo struct {
+	index    []int
+	tag      string
+	position int // Field position to maintain declaration order
+}
+
+// fieldMap contains the result of field mapping
+type fieldMap struct {
+	fields      map[string]fieldInfo
+	orderedTags []string
+}
+
+// getFieldMap creates a map of tag names to field paths and maintains declaration order
+func getFieldMap(t reflect.Type) fieldMap {
+	result := fieldMap{
+		fields:      make(map[string]fieldInfo),
+		orderedTags: make([]string, 0),
+	}
+
+	pos := 0
+
+	var addFields func(t reflect.Type, index []int, isEmbedded bool)
+	addFields = func(t reflect.Type, index []int, isEmbedded bool) {
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			currIndex := append(index, i)
+
+			// Handle embedded struct
+			if field.Anonymous && field.Type.Kind() == reflect.Struct {
+				addFields(field.Type, currIndex, true)
+				continue
+			}
+
+			// Skip fields without table tag
+			tag := field.Tag.Get(tagTable)
+			if tag == "" || tag == ignore {
+				continue
+			}
+
+			// For embedded fields, skip if tag already exists
+			if isEmbedded && result.hasTag(tag) {
+				continue
+			}
+
+			// Update field info
+			result.fields[tag] = fieldInfo{
+				index:    currIndex,
+				tag:      tag,
+				position: pos,
+			}
+
+			// Update orderedTags
+			if existingIdx := result.findTagIndex(tag); existingIdx >= 0 {
+				// Remove existing tag if being overwritten by non-embedded field
+				result.orderedTags = append(result.orderedTags[:existingIdx], result.orderedTags[existingIdx+1:]...)
+			}
+			result.orderedTags = append(result.orderedTags, tag)
+			pos++
+		}
+	}
+
+	addFields(t, nil, false)
+	return result
+}
+
+// findTagIndex returns the index of the tag in orderedTags, or -1 if not found
+func (fm *fieldMap) findTagIndex(tag string) int {
+	for i, t := range fm.orderedTags {
+		if t == tag {
+			return i
+		}
+	}
+	return -1
+}
+
+// hasTag checks if a tag already exists in orderedTags
+func (fm *fieldMap) hasTag(tag string) bool {
+	for _, t := range fm.orderedTags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // setField sets the value of a struct field from a string with custom options
