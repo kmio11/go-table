@@ -1,11 +1,11 @@
-package tblcsv_test
+package csvmap_test
 
 import (
 	"bytes"
 	"fmt"
 	"strings"
 
-	"github.com/kmio11/go-table/tblcsv"
+	"github.com/kmio11/tablemap/csvmap"
 )
 
 func ExampleReadAll() {
@@ -19,8 +19,8 @@ Jane Smith,25,jane@example.com`
 		Email string `table:"email"`
 	}
 
-	reader := tblcsv.NewReader(strings.NewReader(csvData), nil)
-	persons, err := tblcsv.ReadAll[Person](reader)
+	reader := csvmap.NewReader(strings.NewReader(csvData), nil)
+	persons, err := csvmap.ReadAll[Person](reader)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
@@ -47,8 +47,8 @@ func ExampleWriteAll() {
 	}
 
 	var buf bytes.Buffer
-	writer := tblcsv.NewWriter(&buf, nil)
-	if err := tblcsv.WriteAll(writer, persons); err != nil {
+	writer := csvmap.NewWriter(&buf, nil)
+	if err := csvmap.WriteAll(writer, persons); err != nil {
 		fmt.Println("Error:", err)
 		return
 	}

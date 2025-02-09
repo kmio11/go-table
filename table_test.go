@@ -1,12 +1,11 @@
-package table_test
+package tablemap_test
 
 import (
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/kmio11/go-table"
-
+	"github.com/kmio11/tablemap"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -73,7 +72,7 @@ func TestMarshal(t *testing.T) {
 	}
 
 	// Test Marshal
-	header, data, err := table.Marshal(testData)
+	header, data, err := tablemap.Marshal(testData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
@@ -112,7 +111,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	var result []TestStruct
-	err := table.Unmarshal(header, data, &result)
+	err := tablemap.Unmarshal(header, data, &result)
 	if err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
@@ -153,13 +152,13 @@ func TestUnmarshal_nilValue(t *testing.T) {
 		},
 	}
 
-	header, data, err := table.Marshal(testData)
+	header, data, err := tablemap.Marshal(testData)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
 	var result []TestStruct
-	err = table.Unmarshal(header, data, &result)
+	err = tablemap.Unmarshal(header, data, &result)
 	if err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
@@ -191,7 +190,7 @@ func TestMarshalWithOptions_nilValue(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []nilValueTestStruct
-		options  *table.Options
+		options  *tablemap.Options
 		expected [][]string
 	}{
 		{
@@ -212,7 +211,7 @@ func TestMarshalWithOptions_nilValue(t *testing.T) {
 				{IntPtr: nil, StringPtr: &str, TimePtr: &now, Normal: "test1"},
 				{IntPtr: &num, StringPtr: nil, TimePtr: nil, Normal: "test2"},
 			},
-			options: &table.Options{NilValue: "NULL"},
+			options: &tablemap.Options{NilValue: "NULL"},
 			expected: [][]string{
 				{"NULL", "hello", now.Format(time.RFC3339), "test1"},
 				{"42", "NULL", "NULL", "test2"},
@@ -224,7 +223,7 @@ func TestMarshalWithOptions_nilValue(t *testing.T) {
 				{IntPtr: nil, StringPtr: &str, TimePtr: &now, Normal: "test1"},
 				{IntPtr: &num, StringPtr: nil, TimePtr: nil, Normal: "test2"},
 			},
-			options: &table.Options{NilValue: ""},
+			options: &tablemap.Options{NilValue: ""},
 			expected: [][]string{
 				{"", "hello", now.Format(time.RFC3339), "test1"},
 				{"42", "", "", "test2"},
@@ -234,7 +233,7 @@ func TestMarshalWithOptions_nilValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			header, data, err := table.MarshalWithOptions(tt.input, tt.options)
+			header, data, err := tablemap.MarshalWithOptions(tt.input, tt.options)
 			assert.NoError(t, err)
 			assert.Equal(t, []string{"int", "str", "time", "normal"}, header)
 
@@ -266,7 +265,7 @@ func TestUnmarshalWithOptions_nilValue(t *testing.T) {
 		name     string
 		header   []string
 		data     [][]string
-		options  *table.Options
+		options  *tablemap.Options
 		expected []nilValueTestStruct
 	}{
 		{
@@ -296,7 +295,7 @@ func TestUnmarshalWithOptions_nilValue(t *testing.T) {
 				{"NULL", "hello", now.Format(time.RFC3339), "test1"},
 				{"42", "NULL", "NULL", "test2"},
 			},
-			options: &table.Options{NilValue: "NULL"},
+			options: &tablemap.Options{NilValue: "NULL"},
 			expected: []nilValueTestStruct{
 				{
 					StringPtr: &str,
@@ -316,7 +315,7 @@ func TestUnmarshalWithOptions_nilValue(t *testing.T) {
 				{"", "hello", now.Format(time.RFC3339), "test1"},
 				{"42", "", "", "test2"},
 			},
-			options: &table.Options{NilValue: ""},
+			options: &tablemap.Options{NilValue: ""},
 			expected: []nilValueTestStruct{
 				{
 					StringPtr: &str,
@@ -341,7 +340,7 @@ func TestUnmarshalWithOptions_nilValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var result []nilValueTestStruct
-			err := table.UnmarshalWithOptions(tt.header, tt.data, &result, tt.options)
+			err := tablemap.UnmarshalWithOptions(tt.header, tt.data, &result, tt.options)
 
 			if tt.name == "error case - nil value for non-pointer field" {
 				assert.Error(t, err)
@@ -441,7 +440,7 @@ func TestMarshal_embedded(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			header, data, err := table.Marshal(tt.input)
+			header, data, err := tablemap.Marshal(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Marshal() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -513,7 +512,7 @@ func TestUnmarshal_embedded(t *testing.T) {
 				t.Fatalf("Unexpected type: %T", v)
 			}
 
-			err := table.Unmarshal(tt.header, tt.data, got)
+			err := tablemap.Unmarshal(tt.header, tt.data, got)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -653,7 +652,7 @@ func TestMarshal_headerOrder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			header, data, err := table.Marshal(tt.input)
+			header, data, err := tablemap.Marshal(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return

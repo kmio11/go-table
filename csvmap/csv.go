@@ -1,20 +1,20 @@
-package tblcsv
+package csvmap
 
 import (
 	"encoding/csv"
 	"io"
 
-	"github.com/kmio11/go-table"
+	"github.com/kmio11/tablemap"
 )
 
 // Reader is a CSV reader that can unmarshal data into structs.
 type Reader struct {
 	R    *csv.Reader
-	opts *table.Options
+	opts *tablemap.Options
 }
 
-// NewReader creates a new Reader with optional table.Options.
-func NewReader(r io.Reader, opts *table.Options) *Reader {
+// NewReader creates a new Reader with optional tablemap.Options.
+func NewReader(r io.Reader, opts *tablemap.Options) *Reader {
 	return &Reader{
 		R:    csv.NewReader(r),
 		opts: opts,
@@ -44,7 +44,7 @@ func ReadAll[T any](r *Reader) ([]T, error) {
 
 	// Convert to struct slice
 	var result []T
-	if err := table.UnmarshalWithOptions(header, rows, &result, r.opts); err != nil {
+	if err := tablemap.UnmarshalWithOptions(header, rows, &result, r.opts); err != nil {
 		return nil, err
 	}
 
@@ -54,11 +54,11 @@ func ReadAll[T any](r *Reader) ([]T, error) {
 // Writer is a CSV writer that can marshal structs into CSV format.
 type Writer struct {
 	W    *csv.Writer
-	opts *table.Options
+	opts *tablemap.Options
 }
 
-// NewWriter creates a new Writer with optional table.Options.
-func NewWriter(w io.Writer, opts *table.Options) *Writer {
+// NewWriter creates a new Writer with optional tablemap.Options.
+func NewWriter(w io.Writer, opts *tablemap.Options) *Writer {
 	return &Writer{
 		W:    csv.NewWriter(w),
 		opts: opts,
@@ -74,7 +74,7 @@ func WriteAll[T any](w *Writer, data []T) error {
 	var rows [][]string
 	var err error
 
-	header, rows, err = table.MarshalWithOptions(data, w.opts)
+	header, rows, err = tablemap.MarshalWithOptions(data, w.opts)
 	if err != nil {
 		return err
 	}

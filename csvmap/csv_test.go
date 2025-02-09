@@ -1,4 +1,4 @@
-package tblcsv_test
+package csvmap_test
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/kmio11/go-table"
-	"github.com/kmio11/go-table/tblcsv"
+	"github.com/kmio11/tablemap"
+	"github.com/kmio11/tablemap/csvmap"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -146,8 +146,8 @@ func TestReader(t *testing.T) {
 			err := csvTemplate.Execute(&buf, tt.data)
 			assert.NoError(t, err)
 
-			reader := tblcsv.NewReader(&buf, nil)
-			result, err := tblcsv.ReadAll[TestStruct](reader)
+			reader := csvmap.NewReader(&buf, nil)
+			result, err := csvmap.ReadAll[TestStruct](reader)
 			assert.NoError(t, err)
 
 			assert.Equal(t, len(tt.expected), len(result))
@@ -169,14 +169,14 @@ func TestReader_nil_options(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		opts    *table.Options
+		opts    *tablemap.Options
 		data    []testData
 		expect  []TestStructPtr
 		wantErr bool
 	}{
 		{
 			name: "with NULL as nil value",
-			opts: &table.Options{NilValue: "NULL"},
+			opts: &tablemap.Options{NilValue: "NULL"},
 			data: []testData{
 				{
 					String: "test1",
@@ -204,7 +204,7 @@ func TestReader_nil_options(t *testing.T) {
 		},
 		{
 			name: "with custom nil value",
-			opts: &table.Options{NilValue: "-"},
+			opts: &tablemap.Options{NilValue: "-"},
 			data: []testData{
 				{
 					String: "test1",
@@ -238,8 +238,8 @@ func TestReader_nil_options(t *testing.T) {
 			err := csvTemplate.Execute(&buf, tt.data)
 			assert.NoError(t, err)
 
-			reader := tblcsv.NewReader(&buf, tt.opts)
-			result, err := tblcsv.ReadAll[TestStructPtr](reader)
+			reader := csvmap.NewReader(&buf, tt.opts)
+			result, err := csvmap.ReadAll[TestStructPtr](reader)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -313,17 +313,15 @@ func TestWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writer := tblcsv.NewWriter(&buf, nil)
+			writer := csvmap.NewWriter(&buf, nil)
 
-			err := tblcsv.WriteAll(writer, tt.input)
+			err := csvmap.WriteAll(writer, tt.input)
 			assert.NoError(t, err)
 
-			// 期待値のCSV文字列を生成
 			var expected bytes.Buffer
 			err = csvTemplate.Execute(&expected, tt.expected)
 			assert.NoError(t, err)
 
-			// 書き出されたCSV文字列を検証
 			assert.Equal(t, expected.String(), buf.String())
 		})
 	}
@@ -334,14 +332,14 @@ func TestWriter_nil_options(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		opts     *table.Options
+		opts     *tablemap.Options
 		input    []TestStructPtr
 		expected []testData
 		wantErr  bool
 	}{
 		{
 			name: "with NULL as nil value",
-			opts: &table.Options{NilValue: "NULL"},
+			opts: &tablemap.Options{NilValue: "NULL"},
 			input: []TestStructPtr{
 				{
 					String: P("test1"),
@@ -369,7 +367,7 @@ func TestWriter_nil_options(t *testing.T) {
 		},
 		{
 			name: "with custom nil value",
-			opts: &table.Options{NilValue: "-"},
+			opts: &tablemap.Options{NilValue: "-"},
 			input: []TestStructPtr{
 				{
 					String: P("test1"),
@@ -400,21 +398,19 @@ func TestWriter_nil_options(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writer := tblcsv.NewWriter(&buf, tt.opts)
+			writer := csvmap.NewWriter(&buf, tt.opts)
 
-			err := tblcsv.WriteAll(writer, tt.input)
+			err := csvmap.WriteAll(writer, tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
 
-			// 期待値のCSV文字列を生成
 			var expected bytes.Buffer
 			err = csvTemplate.Execute(&expected, tt.expected)
 			assert.NoError(t, err)
 
-			// 書き出されたCSV文字列を検証
 			assert.Equal(t, expected.String(), buf.String())
 		})
 	}

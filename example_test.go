@@ -1,9 +1,9 @@
-package table_test
+package tablemap_test
 
 import (
 	"fmt"
 
-	"github.com/kmio11/go-table"
+	"github.com/kmio11/tablemap"
 )
 
 func ExampleUnmarshal() {
@@ -20,7 +20,7 @@ func ExampleUnmarshal() {
 	}
 
 	var users []User
-	if err := table.Unmarshal(header, data, &users); err != nil {
+	if err := tablemap.Unmarshal(header, data, &users); err != nil {
 		panic(err)
 	}
 
@@ -28,7 +28,7 @@ func ExampleUnmarshal() {
 		fmt.Printf("%s is %d years old\n", u.Name, u.Age)
 	}
 
-	newHeader, newData, err := table.Marshal(users)
+	newHeader, newData, err := tablemap.Marshal(users)
 	if err != nil {
 		panic(err)
 	}
@@ -63,7 +63,7 @@ func ExampleMarshal() {
 		{Name: "Charlie", Age: 27},
 	}
 
-	header, data, err := table.Marshal(users)
+	header, data, err := tablemap.Marshal(users)
 	if err != nil {
 		panic(err)
 	}

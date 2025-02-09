@@ -1,4 +1,4 @@
-module github.com/kmio11/go-table
+module github.com/kmio11/tablemap
 
 go 1.23.3
 

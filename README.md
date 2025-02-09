@@ -1,4 +1,4 @@
-# table
+# tablemap
 
 A Go library for easily converting between tabular data and Go structs with flexible marshaling options.
 
@@ -11,7 +11,7 @@ A Go library for easily converting between tabular data and Go structs with flex
 ## Installation
 
 ```bash
-go get github.com/kmio11/go-table
+go get github.com/kmio11/tablemap
 ```
 
 ## Basic Usage
@@ -116,8 +116,8 @@ err = table.UnmarshalWithOptions(header, data, &result, opts)
 
 ## CSV Support
 
-The `tblcsv` package provides integration with CSV files.
-See [tblcsv/example_test.go](tblcsv/example_test.go)
+The `csvmap` package provides integration with CSV files.
+See [csvmap/example_test.go](csvmap/example_test.go)
 
 ## License
 
