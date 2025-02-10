@@ -65,33 +65,27 @@ func UnmarshalWithOptions(header []string, data [][]string, v any, opts *Options
 		return fmt.Errorf("slice elements must be structs")
 	}
 
-	// Get field mapping including embedded fields
-	fields := getFieldMap(sliceElemType).fields
+	// Create row handler for processing
+	r, err := newRow(sliceElemType, header, opts)
+	if err != nil {
+		return err
+	}
 
 	// Process each row
-	for _, row := range data {
-		if len(row) != len(header) {
+	for _, rowData := range data {
+		if len(rowData) != len(header) {
 			return fmt.Errorf("inconsistent data length")
 		}
 
 		// Create new struct
-		newStruct := reflect.New(sliceElemType).Elem()
+		newStruct := reflect.New(sliceElemType)
 
-		// Fill the struct fields
-		for i, col := range row {
-			if info, ok := fields[header[i]]; ok {
-				// Navigate to the field through the embedded structs
-				field := newStruct
-				for _, idx := range info.index {
-					field = field.Field(idx)
-				}
-				if err := setField(field, col, opts); err != nil {
-					return fmt.Errorf("setting field %s: %v", header[i], err)
-				}
-			}
+		// Use row.unmarshalRow to fill the struct
+		if err := r.unmarshalRow(rowData, newStruct.Interface()); err != nil {
+			return err
 		}
 
-		sliceVal.Set(reflect.Append(sliceVal, newStruct))
+		sliceVal.Set(reflect.Append(sliceVal, newStruct.Elem()))
 	}
 
 	return nil
@@ -354,4 +348,122 @@ func formatField(field reflect.Value, opts *Options) string {
 	default:
 		return fmt.Sprintf("%v", field.Interface())
 	}
+}
+
+// row represents a single row of table data processor
+type row struct {
+	header []string
+	fields map[string]fieldInfo
+	opts   *Options
+}
+
+// newRow creates a Row processor with given header for type T
+func newRow(structType reflect.Type, header []string, opts *Options) (*row, error) {
+	if opts == nil {
+		opts = DefaultOptions()
+	}
+
+	if structType.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("structType must be a struct type")
+	}
+
+	// Get field mapping including embedded fields
+	fm := getFieldMap(structType)
+
+	return &row{
+		header: header,
+		fields: fm.fields,
+		opts:   opts,
+	}, nil
+}
+
+// UnmarshalRow converts a single row of data into a struct
+func (r *row) unmarshalRow(data []string, v any) error {
+	if len(data) != len(r.header) {
+		return fmt.Errorf("inconsistent data length")
+	}
+
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return fmt.Errorf("v must be a non-nil pointer to a struct")
+	}
+
+	structVal := rv.Elem()
+	if structVal.Kind() != reflect.Struct {
+		return fmt.Errorf("v must be a pointer to a struct")
+	}
+
+	// Fill the struct fields
+	for i, col := range data {
+		if info, ok := r.fields[r.header[i]]; ok {
+			// Navigate to the field through the embedded structs
+			field := structVal
+			for _, idx := range info.index {
+				field = field.Field(idx)
+			}
+			if err := setField(field, col, r.opts); err != nil {
+				return fmt.Errorf("setting field %s: %v", r.header[i], err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// MarshalRow converts a struct into a single row of data
+func (r *row) marshalRow(v any) ([]string, error) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return nil, fmt.Errorf("v must not be nil")
+		}
+		rv = rv.Elem()
+	}
+
+	if rv.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("v must be a struct or pointer to struct")
+	}
+
+	row := make([]string, len(r.header))
+	for i, tag := range r.header {
+		if info, ok := r.fields[tag]; ok {
+			// Navigate to the field through the embedded structs
+			field := rv
+			for _, idx := range info.index {
+				field = field.Field(idx)
+			}
+			row[i] = formatField(field, r.opts)
+		}
+	}
+
+	return row, nil
+}
+
+// RowHandler provides a type-safe way to process table data row by row
+type RowHandler[T any] struct {
+	row *row
+}
+
+// NewRowHandler creates a new RowHandler for the given type and header
+func NewRowHandler[T any](header []string, opts *Options) (*RowHandler[T], error) {
+	var zero T
+	r, err := newRow(reflect.TypeOf(zero), header, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &RowHandler[T]{row: r}, nil
+}
+
+// UnmarshalRow converts a single row of data into a struct of type T
+func (h *RowHandler[T]) UnmarshalRow(data []string) (*T, error) {
+	var result T
+	if err := h.row.unmarshalRow(data, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// MarshalRow converts a struct of type T into a single row of data
+func (h *RowHandler[T]) MarshalRow(v *T) ([]string, error) {
+	return h.row.marshalRow(v)
 }

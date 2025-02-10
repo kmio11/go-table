@@ -663,3 +663,42 @@ func TestMarshal_headerOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestRowHandler(t *testing.T) {
+	type Person struct {
+		Name   string  `table:"name"`
+		Age    int     `table:"age"`
+		Height float64 `table:"height"`
+	}
+
+	header := []string{"name", "age", "height"}
+	data := []string{"Alice", "25", "165.5"}
+
+	// Create type-safe row handler
+	handler, err := tablemap.NewRowHandler[Person](header, nil)
+	if err != nil {
+		t.Fatalf("NewRowHandler failed: %v", err)
+	}
+
+	// Test unmarshaling
+	person, err := handler.UnmarshalRow(data)
+	if err != nil {
+		t.Fatalf("UnmarshalRow failed: %v", err)
+	}
+
+	// Verify unmarshaled data
+	if person.Name != "Alice" || person.Age != 25 || person.Height != 165.5 {
+		t.Errorf("UnmarshalRow result mismatch: got %+v", person)
+	}
+
+	// Test marshaling
+	out, err := handler.MarshalRow(person)
+	if err != nil {
+		t.Fatalf("MarshalRow failed: %v", err)
+	}
+
+	// Verify marshaled data
+	if !reflect.DeepEqual(out, data) {
+		t.Errorf("MarshalRow result mismatch: got %v, want %v", out, data)
+	}
+}
