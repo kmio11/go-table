@@ -702,3 +702,61 @@ func TestRowHandler(t *testing.T) {
 		t.Errorf("MarshalRow result mismatch: got %v, want %v", out, data)
 	}
 }
+
+func TestMarshalUnmarshalCycle(t *testing.T) {
+	intVal := 42
+	testData := []TestStruct{
+		{
+			String:    "test",
+			Int:       123,
+			Bool:      true,
+			CustomPtr: &CustomType{value: "hello"},
+			Custom:    CustomType{value: "world"},
+			Time: TimeWrapper{
+				Time: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			IntPtr: &intVal,
+			// Ignored: "ignored",
+		},
+	}
+
+	// Marshal the data
+	header, data, err := tablemap.Marshal(testData)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// Unmarshal the data back
+	var result []TestStruct
+	err = tablemap.Unmarshal(header, data, &result)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	// Verify the result matches the original data
+	assert.Equal(t, testData, result)
+}
+
+func TestUnmarshalMarshalCycle(t *testing.T) {
+	header := []string{"string", "int", "bool", "custom_ptr", "custom", "time", "int_ptr"}
+	data := [][]string{
+		{"test", "123", "true", "custom:hello", "custom:world", "2024-01-01T00:00:00Z", "42"},
+	}
+
+	// Unmarshal the data
+	var result []TestStruct
+	err := tablemap.Unmarshal(header, data, &result)
+	if err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	// Marshal the data back
+	headerOut, dataOut, err := tablemap.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// Verify the result matches the original data
+	assert.Equal(t, header, headerOut)
+	assert.Equal(t, data, dataOut)
+}
