@@ -117,30 +117,22 @@ func MarshalWithOptions(v any, opts *Options) ([]string, [][]string, error) {
 		return nil, nil, fmt.Errorf("slice elements must be structs")
 	}
 
-	// Get field mapping including embedded fields and ordered tags
-	fm := getFieldMap(elemType)
-	fields, orderedTags := fm.fields, fm.orderedTags
+	r, err := newRow(elemType, nil, opts)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Create data rows
 	data := make([][]string, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
-		row := make([]string, len(orderedTags))
-		item := rv.Index(i)
-
-		for j, tag := range orderedTags {
-			info := fields[tag]
-			// Navigate to the field through the embedded structs
-			field := item
-			for _, idx := range info.index {
-				field = field.Field(idx)
-			}
-			row[j] = formatField(field, opts)
+		row, err := r.marshalRow(rv.Index(i).Interface())
+		if err != nil {
+			return nil, nil, err
 		}
-
 		data[i] = row
 	}
 
-	return orderedTags, data, nil
+	return r.header, data, nil
 }
 
 // fieldInfo stores information about a struct field including its path through embedded structs
@@ -311,6 +303,13 @@ func formatField(field reflect.Value, opts *Options) string {
 		return formatField(field.Elem(), opts)
 	}
 
+	// Create a new addressable copy of the struct if it's not already addressable
+	if !field.CanAddr() {
+		newValue := reflect.New(field.Type()).Elem()
+		newValue.Set(field)
+		field = newValue
+	}
+
 	// 1. Check for CellMarshaler
 	if field.CanAddr() {
 		if tm, ok := field.Addr().Interface().(CellMarshaler); ok {
@@ -369,6 +368,10 @@ func newRow(structType reflect.Type, header []string, opts *Options) (*row, erro
 
 	// Get field mapping including embedded fields
 	fm := getFieldMap(structType)
+
+	if header == nil {
+		header = fm.orderedTags
+	}
 
 	return &row{
 		header: header,

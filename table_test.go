@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// CustomType implements TableMarshaller and CellUnmarshaler
+// CustomType implements CellMarshaler and CellUnmarshaler
 type CustomType struct {
 	value string
 }
