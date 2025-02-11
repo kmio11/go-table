@@ -2,6 +2,7 @@ package csvmap_test
 
 import (
 	"bytes"
+	"io"
 	"testing"
 	"text/template"
 	"time"
@@ -146,8 +147,8 @@ func TestReader(t *testing.T) {
 			err := csvTemplate.Execute(&buf, tt.data)
 			assert.NoError(t, err)
 
-			reader := csvmap.NewReader(&buf, nil)
-			result, err := csvmap.ReadAll[TestStruct](reader)
+			reader := csvmap.NewReader[TestStruct](&buf, nil)
+			result, err := reader.ReadAll()
 			assert.NoError(t, err)
 
 			assert.Equal(t, len(tt.expected), len(result))
@@ -238,8 +239,8 @@ func TestReader_nil_options(t *testing.T) {
 			err := csvTemplate.Execute(&buf, tt.data)
 			assert.NoError(t, err)
 
-			reader := csvmap.NewReader(&buf, tt.opts)
-			result, err := csvmap.ReadAll[TestStructPtr](reader)
+			reader := csvmap.NewReader[TestStructPtr](&buf, tt.opts)
+			result, err := reader.ReadAll()
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -313,9 +314,9 @@ func TestWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writer := csvmap.NewWriter(&buf, nil)
+			writer := csvmap.NewWriter[TestStruct](&buf, nil)
 
-			err := csvmap.WriteAll(writer, tt.input)
+			err := writer.WriteAll(tt.input)
 			assert.NoError(t, err)
 
 			var expected bytes.Buffer
@@ -398,9 +399,9 @@ func TestWriter_nil_options(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writer := csvmap.NewWriter(&buf, tt.opts)
+			writer := csvmap.NewWriter[TestStructPtr](&buf, tt.opts)
 
-			err := csvmap.WriteAll(writer, tt.input)
+			err := writer.WriteAll(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -409,6 +410,128 @@ func TestWriter_nil_options(t *testing.T) {
 
 			var expected bytes.Buffer
 			err = csvTemplate.Execute(&expected, tt.expected)
+			assert.NoError(t, err)
+
+			assert.Equal(t, expected.String(), buf.String())
+		})
+	}
+}
+
+func TestReader_Read(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	tests := []struct {
+		name     string
+		data     []testData
+		expected []TestStruct
+	}{
+		{
+			name: "read one by one",
+			data: []testData{
+				{
+					String: "test1",
+					Int:    "123",
+					Time:   now.Format(time.RFC3339),
+				},
+				{
+					String: "test2",
+					Int:    "456",
+					Time:   now.Add(24 * time.Hour).Format(time.RFC3339),
+				},
+			},
+			expected: []TestStruct{
+				{
+					String: "test1",
+					Int:    123,
+					Time:   TestTime{Time: now},
+				},
+				{
+					String: "test2",
+					Int:    456,
+					Time:   TestTime{Time: now.Add(24 * time.Hour)},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			err := csvTemplate.Execute(&buf, tt.data)
+			assert.NoError(t, err)
+
+			reader := csvmap.NewReader[TestStruct](&buf, nil)
+			var result []TestStruct
+
+			for {
+				record, err := reader.Read()
+				if err == io.EOF {
+					break
+				}
+				assert.NoError(t, err)
+				result = append(result, *record)
+			}
+
+			assert.Equal(t, len(tt.expected), len(result))
+			for i := range tt.expected {
+				assert.Equal(t, tt.expected[i].String, result[i].String)
+				assert.Equal(t, tt.expected[i].Int, result[i].Int)
+				assert.Equal(t, tt.expected[i].Time.Time.Unix(), result[i].Time.Time.Unix())
+			}
+		})
+	}
+}
+
+func TestWriter_Write(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	tests := []struct {
+		name     string
+		input    []TestStruct
+		expected []testData
+	}{
+		{
+			name: "write one by one",
+			input: []TestStruct{
+				{
+					String: "test1",
+					Int:    123,
+					Time:   TestTime{Time: now},
+				},
+				{
+					String: "test2",
+					Int:    456,
+					Time:   TestTime{Time: now.Add(24 * time.Hour)},
+				},
+			},
+			expected: []testData{
+				{
+					String: "test1",
+					Int:    "123",
+					Time:   now.Format(time.RFC3339),
+				},
+				{
+					String: "test2",
+					Int:    "456",
+					Time:   now.Add(24 * time.Hour).Format(time.RFC3339),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writer := csvmap.NewWriter[TestStruct](&buf, nil)
+
+			for _, record := range tt.input {
+				err := writer.Write(record)
+				assert.NoError(t, err)
+			}
+			writer.W.Flush()
+
+			var expected bytes.Buffer
+			err := csvTemplate.Execute(&expected, tt.expected)
 			assert.NoError(t, err)
 
 			assert.Equal(t, expected.String(), buf.String())
