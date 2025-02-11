@@ -15,11 +15,11 @@ type TestTime struct {
 	Time time.Time
 }
 
-func (t *TestTime) MarshalTable() (string, error) {
+func (t *TestTime) MarshalCell() (string, error) {
 	return t.Time.Format(time.RFC3339), nil
 }
 
-func (t *TestTime) UnmarshalTable(s string) error {
+func (t *TestTime) UnmarshalCell(s string) error {
 	parsed, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		return err

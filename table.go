@@ -7,16 +7,16 @@ import (
 	"strconv"
 )
 
-// TableMarshaler is the interface implemented by types that
+// CellMarshaler is the interface implemented by types that
 // can marshal themselves into a table cell string representation.
-type TableMarshaler interface {
-	MarshalTable() (string, error)
+type CellMarshaler interface {
+	MarshalCell() (string, error)
 }
 
-// TableUnmarshaler is the interface implemented by types that
+// CellUnmarshaler is the interface implemented by types that
 // can unmarshal a table cell string representation of themselves.
-type TableUnmarshaler interface {
-	UnmarshalTable(string) error
+type CellUnmarshaler interface {
+	UnmarshalCell(string) error
 }
 
 // Options defines configuration options for marshaling and unmarshaling.
@@ -253,10 +253,10 @@ func setField(field reflect.Value, value string, opts *Options) error {
 		return setField(field.Elem(), value, opts)
 	}
 
-	// 1. Check for TableUnmarshaler
+	// 1. Check for CellUnmarshaler
 	if field.CanAddr() {
-		if tu, ok := field.Addr().Interface().(TableUnmarshaler); ok {
-			return tu.UnmarshalTable(value)
+		if tu, ok := field.Addr().Interface().(CellUnmarshaler); ok {
+			return tu.UnmarshalCell(value)
 		}
 	}
 
@@ -311,10 +311,10 @@ func formatField(field reflect.Value, opts *Options) string {
 		return formatField(field.Elem(), opts)
 	}
 
-	// 1. Check for TableMarshaler
+	// 1. Check for CellMarshaler
 	if field.CanAddr() {
-		if tm, ok := field.Addr().Interface().(TableMarshaler); ok {
-			str, err := tm.MarshalTable()
+		if tm, ok := field.Addr().Interface().(CellMarshaler); ok {
+			str, err := tm.MarshalCell()
 			if err == nil {
 				return str
 			}

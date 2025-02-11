@@ -9,16 +9,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// CustomType implements TableMarshaller and TableUnmarshaler
+// CustomType implements TableMarshaller and CellUnmarshaler
 type CustomType struct {
 	value string
 }
 
-func (c *CustomType) MarshalTable() (string, error) {
+func (c *CustomType) MarshalCell() (string, error) {
 	return "custom:" + c.value, nil
 }
 
-func (c *CustomType) UnmarshalTable(s string) error {
+func (c *CustomType) UnmarshalCell(s string) error {
 	if len(s) > 7 && s[0:7] == "custom:" {
 		c.value = s[7:]
 	}

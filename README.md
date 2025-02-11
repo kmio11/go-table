@@ -4,7 +4,7 @@ A Go library for easily converting between tabular data and Go structs with flex
 
 ## Features
 
-- Convert between table data (headers and rows) and Go structs with field tags to map table columns
+- Convert between table data (headers `[]string` and rows `[][]string`) and Go structs with field tags to map table columns
 - Support for custom marshaling/unmarshaling through interfaces
 - Handle nil values with configurable representation
 
@@ -60,18 +60,18 @@ For more examples, see [example_test.go](example_test.go)
 
 The library supports two ways to implement custom marshaling:
 
-1. Implement `TableMarshaler` and `TableUnmarshaler` interfaces:
+1. Implement `CellMarshaler` and `CellUnmarshaler` interfaces:
 
     ```go
     type CustomType struct {
         value string
     }
 
-    func (c *CustomType) MarshalTable() (string, error) {
+    func (c *CustomType) MarshalCell() (string, error) {
         return "custom:" + c.value, nil
     }
 
-    func (c *CustomType) UnmarshalTable(s string) error {
+    func (c *CustomType) UnmarshalCell(s string) error {
         if len(s) > 7 && s[0:7] == "custom:" {
             c.value = s[7:]
         }
@@ -81,7 +81,7 @@ The library supports two ways to implement custom marshaling:
 
 2. Implement `encoding.TextMarshaler` and `encoding.TextUnmarshaler` interfaces:
 
-    If a type implements these standard Go interfaces, the library will automatically use them for marshaling and unmarshaling when `TableMarshaler`/`TableUnmarshaler` are not implemented.
+    If a type implements these standard Go interfaces, the library will automatically use them for marshaling and unmarshaling when `CellMarshaler`/`CellUnmarshaler` are not implemented.
 
 ## Options
 
